@@ -1,7 +1,8 @@
 /**
  * Runs the API. The database is Postgres when DATABASE_URL is set; otherwise
  * PGlite in NABU_PGLITE (a directory, or "memory"), defaulting to .data/pglite
- * so `pnpm dev` needs no database server.
+ * With --dev, only NABU_DEV_DATABASE_URL / NABU_DEV_PGLITE are used (default .data/dev-pglite).
+ * Listening defaults to 127.0.0.1; NABU_HOST can opt deployment into another interface.
  *
  * Per-instance options (gameplan §12):
  *   NABU_LEAGUES=1              weekly leagues (off by default)
@@ -41,6 +42,7 @@ import { createCourses, DEFAULT_BUNDLES } from "./ai/courses.ts";
 import { createGateway, DEFAULT_BUDGETS, validAi } from "./ai/gateway.ts";
 import { providerFromEnv } from "./ai/providers.ts";
 import { createApp } from "./app.ts";
+import { serverConfig } from "./config.ts";
 import { minAgeFromEnv } from "./age.ts";
 import { limitsFromEnv } from "./limits.ts";
 import { openDatabase } from "./db/index.ts";
@@ -49,16 +51,16 @@ import { nativeSendersFromEnv } from "./nativepush.ts";
 import { sendReminders } from "./reminders.ts";
 import { sendPush, vapidKeys, type Vapid } from "./webpush.ts";
 
-const port = Number(process.env["PORT"] ?? 8787);
-const on = (name: string): boolean => process.env[name] === "1";
-const { db, close } = await openDatabase({ url: process.env["DATABASE_URL"], pglite: process.env["NABU_PGLITE"] ?? ".data/pglite" });
+const env = process.env;
+const { hostname, port, database } = serverConfig(env, process.argv.includes("--dev"));
+const on = (name: string): boolean => env[name] === "1";
+const { db, close } = await openDatabase(database);
 
 const leagues = on("NABU_LEAGUES") ? DEFAULT_LEAGUE : undefined;
 let vapid: Promise<Vapid> | undefined;
 // An empty setting is an unset one: deploy/compose.yaml passes every option, set or not.
 const keys = on("NABU_PUSH") ? () => (vapid ??= vapidKeys(db, process.env["NABU_VAPID_SUBJECT"] || "mailto:nabu@localhost")) : undefined;
 
-const env = process.env;
 const count = (name: string, fallback: number): number => {
   const n = Number(env[name] ?? fallback);
   return Number.isSafeInteger(n) && n >= 0 ? n : fallback;
@@ -126,7 +128,10 @@ if (on("NABU_TEST_HOOKS")) {
   setInterval(tick, 5 * 60_000).unref();
 }
 
-const server = serve({ fetch: app.fetch, port }, (info) => console.log(`api listening on http://localhost:${info.port}`));
+const server = serve({ fetch: app.fetch, hostname, port }, (info) => {
+  const host = info.address.includes(":") ? `[${info.address}]` : info.address;
+  console.log(`api listening on http://${host}:${info.port}`);
+});
 
 const shutdown = (): void => {
   server.close();

@@ -21,10 +21,9 @@ import {
   start,
   step,
   type CourseView,
-  type Exercise,
   type MakeContext,
 } from "../src/lesson/index.ts";
-import { SENTENCE_TEMPLATES } from "../src/lesson/templates.ts";
+import { makeListenSelect, SENTENCE_TEMPLATES } from "../src/lesson/templates.ts";
 import { surfaceOf } from "../src/text/index.ts";
 import { eventFactory, loadCourse, manifestOf } from "./learner-fixtures.ts";
 
@@ -69,10 +68,9 @@ describe("listening templates", () => {
 
   it("listen-select offers the word's written form among others", () => {
     const ctx = ctxOf(fa);
-    const made = allKcs(fa).flatMap((kc) => KC_LISTENING.map((make) => make(ctx, kc))).filter((e): e is Exercise => e?.template === "listen-select");
+    const made = allKcs(fa).map((kc) => makeListenSelect(ctx, kc)).filter((e): e is NonNullable<typeof e> => e !== undefined);
     expect(made.length).toBeGreaterThan(3);
     for (const ex of made) {
-      if (ex.template !== "listen-select") continue;
       expect(ex.options).toHaveLength(3);
       expect(gradeExercise(ex, { tag: "choice", index: ex.answer }, grader).verdict).toBe("CORRECT");
     }
@@ -105,8 +103,8 @@ describe("listening templates", () => {
     ),
   ];
 
-  // Every word of three full courses over eight seeds: more than the default five seconds on CI.
-  it("minimal pairs: one letter apart in writing (uz), one sound or tone apart in Jyutping (yue)", { timeout: 60_000 }, () => {
+  // Keep the full-course, eight-seed coverage; independent cases identify which language broke.
+  it("Uzbek minimal pairs differ by exactly one orthographic letter", { timeout: 60_000 }, () => {
     const uz = loadCourse("uz", "uz-Latn/standard");
     // The fixture's own pairs (yoʻl/yoʻq, bor/qor, uch/uy…) are each one letter apart, counted in the
     // orthography's letters (ch, sh, ng, oʻ and gʻ are one letter each), as the template counts.
@@ -122,18 +120,27 @@ describe("listening templates", () => {
       }
       return row.at(-1) ?? a.length;
     };
+    const letters = profileOf(uz, uz.orthography);
     for (const pair of own) {
-      const letters = profileOf(uz, uz.orthography);
       const [a = [], b = []] = pair.split("/").map((w) => letters.units(letters.normalize(w)));
       expect(distance(a, b), pair).toBe(1);
     }
-    expect(pairsOf(withWord(uz, "men", "sen"))).toContain("men/sen");
+  });
+
+  it("an added Uzbek word participates in minimal pairs", { timeout: 60_000 }, () => {
+    expect(pairsOf(withWord(loadCourse("uz", "uz-Latn/standard"), "men", "sen"))).toContain("men/sen");
+  });
+
+  it("Cantonese minimal pairs differ by one sound or tone", { timeout: 60_000 }, () => {
     // The fixture's own: 呀 aa3 / 嗎 maa3 (an onset), 係 hai6 / 喺 hai2 (a tone), 五 ng5 / 我 ngo5 (a final);
     // 嗎 maa3 and 啦 laa1 differ in two places, so they are no pair. Add 媽 maa1: 嗎/媽 differ in tone,
     // 啦 laa1/媽 in the onset.
     const yuePairs = pairsOf(withAudio(loadCourse("yue")));
     expect(yuePairs).toEqual(expect.arrayContaining(["呀/嗎", "係/喺", "五/我"]));
     expect(yuePairs).not.toContain("啦/嗎");
+  });
+
+  it("an added Cantonese reading participates in tone and onset contrasts", { timeout: 60_000 }, () => {
     const pairs = pairsOf(withWord(loadCourse("yue"), "嗎", "媽", "maa1"));
     expect(pairs).toEqual(expect.arrayContaining(["呀/嗎", "嗎/媽", "啦/媽"]));
     expect(pairs).not.toContain("啦/嗎");

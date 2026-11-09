@@ -951,14 +951,13 @@ class CosyVoiceEngine(Protocol):
         ...
 
 
-def runtime_command(runtime: Path = COSYVOICE_RUNTIME) -> list[str]:
-    """worker.py in the runtime's environment, which uv makes on first use."""
-    import shutil
-
-    uv = shutil.which("uv")
-    if uv is None:
-        raise ProviderError("navoiy: uv is needed to run the CosyVoice runtime")
-    return [uv, "run", "--project", str(runtime), "python", str(runtime / "worker.py")]
+def runtime_command() -> list[str]:
+    """Do not install or execute the quarantined legacy model environment."""
+    raise ProviderError(
+        "navoiy: CosyVoice generation is disabled pending a security and compatibility update. "
+        "Its legacy PyTorch stack can execute malicious model code (CVE-2025-32434). "
+        "Use the committed audio; see pipeline/runtimes/cosyvoice/README.md."
+    )
 
 
 class CosyVoiceWorker:
@@ -975,12 +974,18 @@ class CosyVoiceWorker:
             text=True,
             encoding="utf-8",
         )
+        try:
+            ready = self._ask(config)
+            if "ready" not in ready:
+                raise ProviderError(
+                    f"navoiy: the runtime did not start: {ready.get('error', ready)}"
+                )
+            self.sampling_rate = int(ready["ready"]["sampleRate"])
+            self.source = Path(ready["ready"]["source"])
+        except Exception:
+            self.close()
+            raise
         atexit.register(self.close)
-        ready = self._ask(config)
-        if "ready" not in ready:
-            raise ProviderError(f"navoiy: the runtime did not start: {ready.get('error', ready)}")
-        self.sampling_rate = int(ready["ready"]["sampleRate"])
-        self.source = Path(ready["ready"]["source"])
 
     def _ask(self, message: dict[str, Any]) -> dict[str, Any]:
         stdin, stdout = self.process.stdin, self.process.stdout
@@ -1008,10 +1013,26 @@ class CosyVoiceWorker:
         return base64.b64decode(answer["pcm"])
 
     def close(self) -> None:
+        import atexit
+        import contextlib
+        import subprocess
+
+        atexit.unregister(self.close)
+        if self.process.stdin is not None and not self.process.stdin.closed:
+            with contextlib.suppress(BrokenPipeError):
+                self.process.stdin.close()
         if self.process.poll() is None:
-            assert self.process.stdin is not None
-            self.process.stdin.close()
-            self.process.wait(timeout=60)
+            try:
+                self.process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.process.terminate()
+                try:
+                    self.process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.process.kill()
+                    self.process.wait()
+        if self.process.stdout is not None:
+            self.process.stdout.close()
 
 
 @cache

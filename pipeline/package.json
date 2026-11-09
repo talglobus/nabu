@@ -5,7 +5,7 @@
   "description": "Turbo shim so `pnpm lint|typecheck|test|codegen` also run the Python pipeline (uv).",
   "license": "MIT OR Apache-2.0",
   "scripts": {
-    "codegen": "node ../packages/schema/scripts/emit-bundle.ts > .bundle.schema.json && uv run --frozen datamodel-codegen --input .bundle.schema.json --input-file-type jsonschema --output src/nabu/schema/models.py --output-model-type pydantic_v2.BaseModel --target-python-version 3.12 --use-annotated --use-type-alias --enum-field-as-literal all --use-standard-collections --use-union-operator --use-title-as-name --use-schema-description --field-constraints --enable-faux-immutability --strict-nullable --disable-timestamp --custom-file-header-path scripts/models-header.txt --formatters ruff-format ruff-check; rm -f .bundle.schema.json",
+    "codegen": "sh scripts/codegen.sh",
     "lint": "uv run --frozen ruff check . && uv run --frozen ruff format --check .",
     "typecheck": "uv run --frozen pyright",
     "test": "uv run --frozen pytest -q"

@@ -1,4 +1,6 @@
-"""CosyVoice2 inference for `nabu audio generate` (ADR 0059), run in this directory's environment.
+"""Quarantined CosyVoice2 inference implementation (ADR 0059, superseded by ADR 0090).
+
+The CLI is disabled. Do not import and run this legacy environment; see the adjacent README.
 
 The pipeline starts it as a subprocess (nabu.audio.providers.CosyVoiceWorker) and talks to it in
 JSON lines. Its first line on stdin says what to load:
@@ -198,4 +200,7 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(
+        "CosyVoice generation is disabled: the legacy environment has known code-execution "
+        "vulnerabilities. Use committed audio; see pipeline/runtimes/cosyvoice/README.md."
+    )

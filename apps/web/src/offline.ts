@@ -79,31 +79,37 @@ const fetchFonts = async (text: string): Promise<void> => {
  * undefined when everything listed is stored. `text` is the course's text, to fetch its fonts.
  */
 export const downloadCourse = async (root: string, manifest: BundleManifest, text: string, units: readonly string[] | undefined, onProgress: (p: Progress) => void): Promise<DownloadError | undefined> => {
-  const cache = await caches.open(BUNDLE_CACHE);
-  const plan = downloadPlan(manifest, await storedPaths(root), units);
-  let done = 0;
-  onProgress({ done, total: plan.bytes });
-  void persist();
-  const queue = [...plan.files];
-  const one = async (): Promise<void> => {
-    for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
-      const url = absolute(`${root}${file.path}`);
-      let response: Response;
-      try {
-        response = await fetch(url, { cache: "no-cache" });
-      } catch {
-        throw failure("network");
-      }
-      if (!response.ok) throw failure("network");
-      const body = await response.arrayBuffer();
-      if (hex(await crypto.subtle.digest("SHA-256", body)) !== file.sha256) throw failure("integrity");
-      await cache.put(url, new Response(body, { headers: { "Content-Type": response.headers.get("Content-Type") ?? "application/octet-stream" } }));
-      done += file.bytes;
-      onProgress({ done, total: plan.bytes });
-    }
-  };
   try {
-    await Promise.all(Array.from({ length: PARALLEL }, one));
+    const cache = await caches.open(BUNDLE_CACHE);
+    const plan = downloadPlan(manifest, await storedPaths(root), units);
+    let done = 0;
+    onProgress({ done, total: plan.bytes });
+    void persist();
+    const queue = [...plan.files];
+    const one = async (): Promise<void> => {
+      for (let file = queue.shift(); file !== undefined; file = queue.shift()) {
+        const url = absolute(`${root}${file.path}`);
+        let response: Response;
+        try {
+          response = await fetch(url, { cache: "no-cache" });
+        } catch {
+          throw failure("network");
+        }
+        if (!response.ok) throw failure("network");
+        const body = await response.arrayBuffer();
+        if (hex(await crypto.subtle.digest("SHA-256", body)) !== file.sha256) throw failure("integrity");
+        await cache.put(url, new Response(body, { headers: { "Content-Type": response.headers.get("Content-Type") ?? "application/octet-stream" } }));
+        done += file.bytes;
+        onProgress({ done, total: plan.bytes });
+      }
+    };
+    const workers = await Promise.allSettled(Array.from({ length: PARALLEL }, () => one().catch((error: unknown) => {
+      // Stop assigning work, but let active writes settle before the UI offers a retry.
+      queue.length = 0;
+      throw error;
+    })));
+    const failed = workers.find((worker) => worker.status === "rejected");
+    if (failed !== undefined) throw failed.reason;
     // Last: the manifest that names exactly these files.
     await cache.put(absolute(`${root}manifest.json`), new Response(JSON.stringify(manifest), { headers: { "Content-Type": "application/json" } }));
     for (const path of stalePaths(manifest, await storedPaths(root))) if (path !== "manifest.json") await cache.delete(absolute(`${root}${path}`));
