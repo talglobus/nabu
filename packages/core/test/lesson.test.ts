@@ -199,7 +199,8 @@ describe.each(VARIANTS)("lessons: %s %s", (id, orthography) => {
 });
 
 describe("template coverage", () => {
-  it("every Phase 3 template appears in some fixture lesson", () => {
+  // This walks every lesson in every orthography; use the same budget as the full-course checks below.
+  it("every Phase 3 template appears in some fixture lesson", { timeout: 30_000 }, () => {
     const seen = new Set<TemplateId>();
     for (const [id, orthography] of VARIANTS) {
       const course = loadCourse(id, orthography);

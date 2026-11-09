@@ -52,6 +52,10 @@ pnpm storybook                 # http://localhost:6006
 pnpm test:visual:docker        # the visual matrix, in the same container CI uses
 ```
 
+For focused regression checks, browser prerequisites, and the current bug map, see
+[testing and recovery](docs/testing-and-recovery.md). Browser tests start fresh servers and keep
+failure traces and screenshots; they run separately from the visual matrix in CI.
+
 The development API ignores `DATABASE_URL`, `NABU_PGLITE`, and `NABU_HOST` inherited from your
 shell. It uses `apps/api/.data/dev-pglite`; set `NABU_DEV_PGLITE=memory` for a disposable database
 or `NABU_DEV_DATABASE_URL` to deliberately use a development Postgres database. Migrations run
