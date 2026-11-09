@@ -33,8 +33,9 @@ pnpm --filter @nabu/core exec vitest run test/listening.test.ts --maxWorkers=2
 pnpm --filter @nabu/core exec vitest run --maxWorkers=2
 ```
 
-CI runs browser behavior independently of screenshot comparisons and grading performance, so a
-visual baseline failure cannot conceal functional failures. The existing full Python, API,
+A companion CI change runs browser behavior independently of screenshot comparisons and grading
+performance, so a visual baseline failure cannot conceal functional failures. It is prepared
+locally but publication is pending GitHub's `workflow` permission. The existing full Python, API,
 conformance, visual, deployment and native-build checks remain necessary; these focused tests do
 not replace them. Python course tests require ICU, and audio-tool tests additionally need ffmpeg
 and eSpeak NG; use CI's dependency setup when running the entire suite.
