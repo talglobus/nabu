@@ -45,12 +45,23 @@ pnpm install
 (cd pipeline && uv sync)        # add --all-groups for PyICU (needs libicu-dev, pkg-config)
 pnpm lint && pnpm typecheck && pnpm test
 pnpm courses                   # compile the fixture courses
-pnpm dev                       # the web app and the API (PGlite: no database server needed)
+pnpm dev                       # web + loopback-only API, with an isolated development database
 pnpm test:e2e                  # lessons by keyboard and by touch, IME, axe, progress, placement, sync
 pnpm --filter @nabu/core simulate --out /tmp/sim.jsonl && (cd pipeline && uv run nabu calibration /tmp/sim.jsonl)
 pnpm storybook                 # http://localhost:6006
 pnpm test:visual:docker        # the visual matrix, in the same container CI uses
 ```
+
+The development API ignores `DATABASE_URL`, `NABU_PGLITE`, and `NABU_HOST` inherited from your
+shell. It uses `apps/api/.data/dev-pglite`; set `NABU_DEV_PGLITE=memory` for a disposable database
+or `NABU_DEV_DATABASE_URL` to deliberately use a development Postgres database. Migrations run
+on startup. `pnpm start` in `apps/api` uses the deployment database settings and binds to loopback
+unless `NABU_HOST` is explicitly set; Docker Compose sets it for the container network.
+
+Navoiy/CosyVoice generation is currently [disabled](pipeline/runtimes/cosyvoice/README.md) because
+its legacy dependencies have known vulnerabilities. Committed audio remains usable. The optional
+OmniVoice environment also retains an unresolved Pillow advisory set through Gradio's `<13`
+constraint; avoid installing optional model environments for ordinary feature development.
 
 ## Licence
 

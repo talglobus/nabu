@@ -32,6 +32,10 @@ deploy/smoke.sh https://your.domain     # optional: checks the instance end to e
   service worker.
 - **The database:** migrations run when the API starts. Postgres keeps its data in the
   `postgres` volume.
+- **API binding:** Compose sets `NABU_HOST=0.0.0.0` inside the API container without publishing
+  its port to the host. Standalone API processes default to `127.0.0.1`. The `--dev` flag always
+  uses loopback and separate `NABU_DEV_DATABASE_URL` / `NABU_DEV_PGLITE` settings.
+- **Test routes:** startup rejects `NABU_TEST_HOOKS=1` when `NODE_ENV=production`.
 - **Abuse limits** are on (ADR 0067). Caddy passes the client's address; `NABU_RATE_LIMITS=off`
   turns them off.
 - **Minors:** if the instance may serve them, set `NABU_MIN_AGE` (ADR 0069). Sign-up then asks the

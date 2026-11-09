@@ -5,6 +5,10 @@ storybook-static/
 coverage/
 *.tsbuildinfo
 .DS_Store
+.data/
+.env
+.env.local
+.env.*.local
 
 # Playwright
 test-results/

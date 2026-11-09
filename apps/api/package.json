@@ -6,7 +6,7 @@
   "license": "MIT OR Apache-2.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/main.ts",
+    "dev": "node --watch src/main.ts --dev",
     "start": "node src/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",

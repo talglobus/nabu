@@ -29,7 +29,7 @@ Architecture and roadmap: docs/gameplan.md (Phases 0–10, built). Next phases: 
 - Conventional commits. Small PRs, one roadmap deliverable each.
 
 ## Commands
-- pnpm i && pnpm dev               # web + api (API on PGlite in apps/api/.data; no database server needed)
+- pnpm i && pnpm dev               # web + loopback API (isolated PGlite in apps/api/.data/dev-pglite)
 - pnpm lint · pnpm typecheck · pnpm test   # all packages incl. the Python pipeline (via turbo)
 - pnpm test:visual:docker          # visual matrix in the pinned Playwright image (needs Docker)
 - pnpm test:visual:update          # same, rewriting baselines: review every changed PNG
@@ -101,6 +101,9 @@ Architecture and roadmap: docs/gameplan.md (Phases 0–10, built). Next phases: 
   window.nabu, and plan with the solver's `planned()`. Seeded history that gets uploaded needs `freshIds()`.
 - The API (apps/api) runs on PGlite unless DATABASE_URL is set; migrations are SQL in src/db/migrations.ts
   (append, never edit). Events are validated against schemas/learner-event.schema.json with Ajv.
+- `pnpm dev` passes `--dev`: deployment database settings are ignored; only `NABU_DEV_DATABASE_URL`
+  and `NABU_DEV_PGLITE` can override the isolated development database. Development binds to loopback.
+- Navoiy/CosyVoice generation is quarantined; do not install its legacy runtime. See its README.
 - API tests open their database with test/database.ts: PGlite, or with NABU_TEST_DATABASE_URL a fresh Postgres
   database per test file (CI's api-postgres job).
 - Sync is optional: the web app talks to a server only with VITE_NABU_API (dev: .env.development) or ?api=.
@@ -423,7 +426,7 @@ Architecture and roadmap: docs/gameplan.md (Phases 0–10, built). Next phases: 
   - `pnpm i`
   - `sudo apt-get install -y libicu-dev pkg-config` (skip `sudo` when root)
   - `sudo apt-get install -y espeak-ng ffmpeg` (audio)
-  - `cd pipeline && uv sync --all-groups` (the speech group pulls CPU PyTorch; add `--no-group speech` to skip it)
+  - `cd pipeline && uv sync --frozen` (default compiler/dev groups; leave optional model environments out)
 - For `pnpm test:visual:docker` in a container, start the Docker daemon first:
   `(dockerd > /tmp/dockerd.log 2>&1 &)`
 - Agents: shell heredocs can turn a typed `\uXXXX` into the literal character. Build escapes in code (chr(92)),

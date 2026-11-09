@@ -36,6 +36,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgres://nabu:${POSTGRES_PASSWORD}@postgres:5432/nabu
+      NABU_HOST: "0.0.0.0"
       # Requests reach the API through Caddy only, which sets X-Forwarded-For.
       NABU_TRUST_PROXY: "1"
       NABU_RATE_LIMITS: ${NABU_RATE_LIMITS:-}

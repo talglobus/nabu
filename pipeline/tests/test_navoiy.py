@@ -13,6 +13,7 @@ import hashlib
 import json
 import os
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -259,6 +260,55 @@ def test_a_worker_that_dies_is_an_error(tmp_path: Path) -> None:
     script.write_text("import sys; sys.exit(3)\n", encoding="utf-8")
     with pytest.raises(ProviderError, match="exited"):
         CosyVoiceWorker({}, command=[sys.executable, str(script)])
+
+
+def test_legacy_runtime_is_blocked_before_starting_a_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_spawn(*args: Any, **kwargs: Any) -> None:
+        pytest.fail("the disabled runtime must not start uv or download code")
+
+    monkeypatch.setattr(subprocess, "Popen", unexpected_spawn)
+    with pytest.raises(ProviderError, match="disabled"):
+        providers.load_navoiy("aisha-org/navoiy-tts", REVISION)
+
+
+def test_direct_worker_entry_point_is_disabled() -> None:
+    result = subprocess.run(
+        [sys.executable, str(providers.COSYVOICE_RUNTIME / "worker.py")],
+        input="{}\n",
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "disabled" in result.stderr
+    assert result.stdout == ""
+
+
+def test_failed_worker_startup_closes_the_process(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    script = tmp_path / "worker.py"
+    script.write_text(
+        'import sys\nprint(\'{"error": "bad model"}\', flush=True)\nsys.stdin.read()\n'
+    )
+    popen = subprocess.Popen
+    children: list[subprocess.Popen[str]] = []
+
+    def start(*args: Any, **kwargs: Any) -> subprocess.Popen[str]:
+        child = popen(*args, **kwargs)
+        children.append(child)
+        return child
+
+    monkeypatch.setattr(subprocess, "Popen", start)
+    with pytest.raises(ProviderError, match="bad model"):
+        CosyVoiceWorker({}, command=[sys.executable, str(script)])
+    assert len(children) == 1
+    assert children[0].poll() is not None
+    assert children[0].stdin is not None and children[0].stdin.closed
+    assert children[0].stdout is not None and children[0].stdout.closed
 
 
 def test_the_runtime_pins_what_the_provider_expects() -> None:
