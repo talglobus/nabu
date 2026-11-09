@@ -110,12 +110,14 @@ const memoryStore = (): EventStore => {
     persistent: false,
     append: (events, options = {}) => {
       receive(options.received);
-      const fresh = events.filter((e) => !log.has(e.id));
-      for (const e of fresh) {
+      const fresh: string[] = [];
+      for (const e of events) {
+        if (log.has(e.id)) continue;
+        fresh.push(e.id);
         log.set(e.id, e);
         if (options.synced !== true) outbox.add(e.id);
       }
-      return Promise.resolve(fresh.map((e) => e.id));
+      return Promise.resolve(fresh);
     },
     eventsOf: (course) => Promise.resolve([...log.values()].filter((e) => e.course === course)),
     allEvents: () => Promise.resolve([...log.values()]),

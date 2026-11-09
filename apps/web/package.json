@@ -13,6 +13,7 @@
     "typecheck": "node ../../packages/ui/scripts/css-module-types.ts --root src --check && tsc -p tsconfig.json && tsc -p sw/tsconfig.json",
     "lint": "eslint .",
     "lint:css": "stylelint \"src/**/*.css\"",
+    "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -36,6 +37,7 @@
     "@vitejs/plugin-react": "^6.2.1",
     "typescript": "~6.0.3",
     "vite": "^8.3.5",
+    "vitest": "^5.1.0",
     "yaml": "^2.9.1"
   }
 }

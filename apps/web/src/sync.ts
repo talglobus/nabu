@@ -181,12 +181,16 @@ export const createSync = async (store: EventStore, server: string | undefined, 
     const touched = new Set<string>();
     // Upload the outbox, oldest first.
     for (const course of await uploadOutbox(store, account, async () => set({ pending: await store.pendingCount() }))) touched.add(course);
+    if (state.account !== account) return;
     // Pull what other devices uploaded.
     let cursor = Number((await store.getMeta(CURSOR)) ?? 0);
     let fresh = 0;
     for (;;) {
       const page = await request<{ events: LearnerEvent[]; cursor: number; more: boolean; received?: Record<string, string> }>(base, `/v1/events?since=${cursor}`, { token });
+      // Cursors belong to one account. Discard a response that arrives after an account switch.
+      if (state.account !== account) return;
       const added = await store.append(page.events, { synced: true, ...(page.received === undefined ? {} : { received: page.received }) });
+      if (state.account !== account) return;
       fresh += added.length;
       // Every course the pull returns is checked: events this device uploaded in the background
       // come back here too, and only now does the window see them on the server.
@@ -197,12 +201,14 @@ export const createSync = async (store: EventStore, server: string | undefined, 
     }
     // Second checks queued while offline (§8.3): the judge may revise answers retroactively.
     const revisedCourses = await flushJudgeQueue(store, base, token);
+    if (state.account !== account) return;
     for (const c of revisedCourses) touched.add(c);
     if (revisedCourses.length > 0) set({ revised: state.revised + 1 });
     // The server is authoritative; the device checks that it agrees (§14.2).
     let verified = true;
     for (const course of touched) {
       const server = await request<{ state: unknown }>(base, `/v1/state?course=${encodeURIComponent(course)}`, { token });
+      if (state.account !== account) return;
       const { seen: _seen, ...local } = replay(await store.eventsOf(course));
       const differs = difference(server.state, JSON.parse(JSON.stringify(local)));
       if (differs !== undefined) {
@@ -224,8 +230,10 @@ export const createSync = async (store: EventStore, server: string | undefined, 
         console.warn(`nabu sync: the server's game state differs from this device's at ${differs}`);
       }
     }
+    const pending = await store.pendingCount();
+    if (state.account !== account) return;
     lastPass = Date.now();
-    set({ phase: "idle", error: undefined, pending: await store.pendingCount(), ...(touched.size > 0 ? { verified } : {}), ...(fresh > 0 ? { pulled: state.pulled + 1 } : {}) });
+    set({ phase: "idle", error: undefined, pending, ...(touched.size > 0 ? { verified } : {}), ...(fresh > 0 ? { pulled: state.pulled + 1 } : {}) });
   };
 
   const syncNow = async (): Promise<void> => {
@@ -235,15 +243,24 @@ export const createSync = async (store: EventStore, server: string | undefined, 
     }
     const account = state.account;
     if (account === undefined) return;
-    set({ phase: "syncing", pending: await store.pendingCount() });
-    running = pass(account)
+    // Claim the run before awaiting storage: simultaneous triggers must share this promise.
+    running = (async () => {
+      const pending = await store.pendingCount();
+      if (state.account !== account) return;
+      set({ phase: "syncing", pending });
+      await pass(account);
+    })()
       .catch(async (e: unknown) => {
+        // A response to an old session must not clear a newer sign-in.
+        if (state.account !== account) return;
         const error = errorOf(e);
         if (error === "signed-out") {
           await store.deleteMeta(ACCOUNT);
+          if (state.account !== account) return;
           set({ account: undefined });
         }
         const pending = await store.pendingCount();
+        if (state.account !== account && !(error === "signed-out" && state.account === undefined)) return;
         if (error === "unreachable" && pending > 0) void requestBackgroundSync();
         set({ phase: error === "unreachable" ? "offline" : "error", error, pending });
       })
